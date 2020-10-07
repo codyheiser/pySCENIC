@@ -5,9 +5,11 @@ import pickle
 import json
 import zlib
 import base64
+import anndata
 import numpy as np
 import pandas as pd
 import loompy as lp
+from scipy import sparse
 from operator import attrgetter
 from typing import Type, Sequence
 from pyscenic.genesig import GeneSignature, openfile
@@ -75,6 +77,21 @@ def load_exp_matrix_as_loom(fname,
                                 columns=ds.ca[attribute_name_cell_id]).T
 
 
+def load_exp_matrix_as_h5ad(fname) -> pd.DataFrame:
+    """
+    Load expression matrix from .h5ad file.
+
+    :param fname: Name of h5ad file to load.
+    :return: A 2-dimensional dataframe (rows = cells x columns = genes).
+    """
+    adata = anndata.read_h5ad(fname)
+    if isinstance(a.X, sparse.csr.csr_matrix):
+        df = pd.DataFrame.sparse.from_spmatrix(a.X, index=a.obs_names, columns=a.var_names)
+    else:
+        df = pd.DataFrame(a.X, index=a.obs_names, columns=a.var_names)
+    return df
+
+
 def suffixes_to_separator(extension):
     if '.csv' in extension:
         return ','
@@ -85,7 +102,7 @@ def suffixes_to_separator(extension):
 def is_valid_suffix(extension, method):
     assert(isinstance(extension,list)), 'extension should be of type "list"'
     if method in ['grn', 'aucell']:
-        valid_extensions = ['.csv', '.tsv', '.loom']
+        valid_extensions = ['.csv', '.tsv', '.loom', '.h5ad']
     elif method == 'ctx':
         valid_extensions = ['.csv', '.tsv']
     elif method == 'ctx_yaml':
@@ -114,6 +131,8 @@ def load_exp_matrix(fname: str, transpose: bool = False,
     if is_valid_suffix(extension, 'grn'):
         if '.loom' in extension:
             return load_exp_matrix_as_loom(fname, return_sparse, attribute_name_cell_id, attribute_name_gene)
+        elif '.h5ad' in extension:
+            return load_exp_matrix_as_h5ad(fname)
         else:
             df = pd.read_csv(fname, sep=suffixes_to_separator(extension), header=0, index_col=0)
             return df.T if transpose else df
